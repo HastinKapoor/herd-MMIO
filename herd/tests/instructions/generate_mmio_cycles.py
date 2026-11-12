@@ -12,6 +12,12 @@ CYCLES = (
 )
 ARM_DEVICES = ("Device-GRE", "Device-nGRE", "Device-nGnRE", "Device-nGnRnE")
 ARM_STRONG = {"Device-nGnRE", "Device-nGnRnE"}
+ARM_CPU_DEVICE_SCOPES = (
+    "scopes: (system (outer (inner (pe P0)) (inner (pe P1))))"
+)
+ARM_SAME_ISH_SCOPES = (
+    "scopes: (system (outer (inner (pe P0) (pe P1))))"
+)
 
 
 def arm_peer(t):
@@ -82,8 +88,10 @@ def arm_seq(proc, pair, types, with_rb):
     if arm_needs_rb(pair, types) and with_rb:
         # The write must reach the readback read.  Strong Device types provide
         # that ordering in program order; reordering types need a first DMB.
+        # Any DMB scope orders accesses reaching the same peripheral, so ISH
+        # is the weakest currently implemented choice for this endpoint edge.
         if types[0] not in ARM_STRONG:
-            seq.append("DMB OSH")
+            seq.append("DMB ISH")
         seq.extend([f"LDR W9,[X10] [{types[0]}]", "DMB OSH", second])
     elif types[0] in ARM_STRONG and types[1] in ARM_STRONG:
         seq.append(second)
@@ -112,7 +120,38 @@ def write_arm(p0pair, p1pair, ytype, xtype, with_rb, weak=False):
         "{\n" + "\n".join(init) + "\n}\n\n" +
         columns(arm_seq(0, p0pair, p0types, with_rb),
                 arm_seq(1, p1pair, p1types, with_rb)) +
-        f"\n\nexists ({condition('ARM', p0pair, p1pair)})\n"
+        f"\n\n{ARM_CPU_DEVICE_SCOPES}\n\n"
+        f"exists ({condition('ARM', p0pair, p1pair)})\n"
+    )
+    (ARM_DIR / f"{name}.litmus").write_text(text)
+
+
+def write_arm_scope_mp(same_ish, barrier):
+    domain = "same-ISH" if same_ish else "different-ISH"
+    ordering = "no-fence" if barrier is None else f"DMB-{barrier}"
+    name = f"SCOPE+MP+Normal-Device-GRE+{domain}+{ordering}"
+    expected = "Never" if barrier == "OSH" or (same_ish and barrier == "ISH") else "Sometimes"
+    p0 = ["MOV W4,#1", "STR W4,[X0] [Normal]"]
+    p1 = ["LDR W2,[X0] [Device-GRE]"]
+    if barrier is not None:
+        p0.append(f"DMB {barrier}")
+        p1.append(f"DMB {barrier}")
+    p0.append("STR W4,[X1] [Device-GRE]")
+    p1.append("LDR W3,[X1] [Normal]")
+    scopes = ARM_SAME_ISH_SCOPES if same_ish else ARM_CPU_DEVICE_SCOPES
+    text = (
+        f"AArch64 {name}\n\n"
+        f"(* CPU-to-CPU scope check over Normal and Device memory.\n"
+        f" * Expected observation: {expected}.\n"
+        " * Both PEs use the same memory type for each location.\n"
+        " *)\n"
+        "{\n"
+        "x=0; y=0;\n"
+        "0:X0=x; 0:X1=y;\n"
+        "1:X0=y; 1:X1=x;\n"
+        "}\n\n" + columns(p0, p1) +
+        f"\n\n{scopes}\n\n"
+        "exists (1:X2=1 /\\ 1:X3=0)\n"
     )
     (ARM_DIR / f"{name}.litmus").write_text(text)
 
@@ -192,6 +231,10 @@ def main():
                 write_rv(p0pair, p1pair, ytype, xtype, True)
                 if needs:
                     write_rv(p0pair, p1pair, ytype, xtype, False, True)
+    write_arm_scope_mp(True, None)
+    write_arm_scope_mp(True, "ISH")
+    write_arm_scope_mp(False, "ISH")
+    write_arm_scope_mp(False, "OSH")
 
 
 if __name__ == "__main__":

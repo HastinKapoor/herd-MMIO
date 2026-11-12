@@ -1,5 +1,27 @@
 This is herdtools7, a tool suite to test weak memory models.
 
+MMIO litmus tests
+=================
+
+Before building, install the herdtools7 prerequisites and opam dependencies as
+described in [INSTALL.md](INSTALL.md).  Then build `herd7` and run the ARM and
+RISC-V MMIO suites with their standalone models from the repository root:
+
+    opam exec -- dune build herd/herd.exe
+    _build/default/herd/herd.exe -conf herd/tests/instructions/ARM_MMIO/mmio.cfg herd/tests/instructions/ARM_MMIO/*.litmus
+    _build/default/herd/herd.exe -cat herd/libdir/riscvmmio.cat herd/tests/instructions/RISCV_MMIO/*.litmus
+
+The generated `+min` tests contain the minimum implemented ordering needed to
+forbid the specified cycle and should report `Never`.  The matching `+no-RB`
+tests deliberately omit a required PCIe readback and should report
+`Sometimes`.  The ARM configuration also loads its Bell shareability topology;
+the `SCOPE+` tests check same-ISH and different-ISH behavior explicitly.
+
+See the [ARM MMIO guide](herd/tests/instructions/ARM_MMIO/README.md) and the
+[RISC-V MMIO guide](herd/tests/instructions/RISCV_MMIO/README.md) for access
+annotations, memory-type mappings, fence and readback rules, individual-test
+commands, suite structure, and current model limitations.
+
 We provide the following tools:
 
  - herd7: a generic simulator for weak memory models

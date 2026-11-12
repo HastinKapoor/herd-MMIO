@@ -1,0 +1,15 @@
+"AArch64 MMIO shareability topology"
+
+enum scopes = 'pe || 'inner || 'outer || 'system
+
+let narrower(s) = match s with
+  || 'system -> 'outer
+  || 'outer -> 'inner
+  || 'inner -> 'pe
+end
+
+let wider(s) = match s with
+  || 'pe -> 'inner
+  || 'inner -> 'outer
+  || 'outer -> 'system
+end

@@ -14,6 +14,25 @@ PCIe Device writes are posted.  A fence does not directly order a Device
 write before a Main access.  Such a sequence requires a Device readback to
 flush the write, followed by a fence whose predecessor set contains `i`.
 
+## Running the tests
+
+First install the herdtools7 prerequisites and opam dependencies described in
+the repository's [`INSTALL.md`](../../../../INSTALL.md).  Then, from the
+repository root, build `herd7` and run one test with the standalone MMIO model:
+
+    opam exec -- dune build herd/herd.exe
+    _build/default/herd/herd.exe -cat herd/libdir/riscvmmio.cat herd/tests/instructions/RISCV_MMIO/CYCLE+P0-RR+P1-WW+Y-Device+X-Main+min-RB-P1.litmus
+
+Run the complete RISC-V MMIO suite with:
+
+    _build/default/herd/herd.exe -cat herd/libdir/riscvmmio.cat herd/tests/instructions/RISCV_MMIO/*.litmus
+
+Generated filenames ending in `+min.litmus` or containing `+min-RB-` should
+report `Never`.  Files ending in `+no-RB.litmus` omit a required PCIe readback
+and should report `Sometimes`.  Use this model only for the annotated MMIO
+tests; ordinary RISC-V tests should continue to use the standard `riscv.cat`
+model.
+
 ## Generated cycle suite
 
 `../generate_mmio_cycles.py` generates all nine two-operation process pairs

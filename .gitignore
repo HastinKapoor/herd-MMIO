@@ -54,7 +54,6 @@ asllib/doc/*.fdb_latexmk
 /herd/libdir/tso_sc.bell
 /herd/libdir/tso_sc.cat
 /herd/libdir/tso_sc.cfg
-/herd/tests/instructions/generate_mmio_cycles.py
 /herd/tests/instructions/C/RW_control_test.litmus
 /herd/tests/instructions/C/per_loc_sc.litmus
 /herd/tests/instructions/C/rel_acq_RR_control.litmus

@@ -2,9 +2,10 @@
  * CPU/MMIO model -- first-principles scaffold.
  *
  * This file deliberately does not include aarch64.cat or aarch64fences.cat.
- * In particular, it does not identify DMB ISH, OSH, and SY through a shared
- * shareability domain.  The architecture supplies the primitive DMB.SY event
- * set; a future access-annotation parser supplies Normal and Device-* sets.
+ * It uses the scope hierarchy supplied by aarch64mmio.bell to distinguish
+ * ordering visible in an Inner Shareable domain from ordering visible in an
+ * Outer Shareable domain.  Access memory types remain event annotations and
+ * are independent of the process topology.
  *)
 
 (* Optional while the per-access memtype syntax is being wired into events. *)
@@ -13,6 +14,7 @@ let Device-nGnRnE = try Device-nGnRnE with emptyset
 let Device-nGnRE = try Device-nGnRE with emptyset
 let Device-nGRE = try Device-nGRE with emptyset
 let Device-GRE = try Device-GRE with emptyset
+let DMB.ISH = try DMB.ISH with emptyset
 let DMB.OSH = try DMB.OSH with emptyset
 let DMB.SY = try DMB.SY with emptyset
 
@@ -25,37 +27,22 @@ include "cos.cat"
 let device-strong = Device-nGnRnE | Device-nGnRE
 let device-non-gre = device-strong | Device-nGRE
 let Device = device-non-gre | Device-GRE
+let ish-dmb = DMB.ISH | DMB.OSH | DMB.SY
 let osh-dmb = DMB.OSH | DMB.SY
+let any-dmb = DMB.ISH | DMB.OSH | DMB.SY
 
 (* "None" entries: the architecture's peripheral-arrival ordering makes
  * program order visible for pairs of non-reordering Device accesses. *)
-let osh-none = [M & device-strong]; po; [M & device-strong]
+let device-none = [M & device-strong]; po; [M & device-strong]
 
-(* "OB" entries.  OB may ultimately also be supplied by dependencies or
- * acquire/release; this initial model realizes it with an OSH-or-SY DMB. *)
+(* OSH-visible entries from the three MMIO ordering tables. *)
 let osh-ob = [M & device-non-gre]; fencerel(osh-dmb); [M & device-non-gre]
-
-(* "BOB" entries from all three tables.  A Device read can be barrier-ordered
- * before a Normal access.  A Device write cannot: its Device-to-Normal cases
- * require the readback path below. *)
 let osh-bob =
     [M & Normal]; fencerel(osh-dmb); [M]
   | [R & Device]; fencerel(osh-dmb); [M & Normal]
   | [M & Device]; fencerel(osh-dmb); [M & Device-GRE]
   | [M & Device-GRE]; fencerel(osh-dmb); [M & Device]
 
-(* PCIe readback requires the Device write to be ordered before the Device
- * read; mere program order is not sufficient for a reordering Device type.
- * osh-none supplies bare program order for non-reordering Device types, while
- * osh-ob/osh-bob supply cases ordered by an OSH-or-SY DMB.  The chart assumes
- * both Device accesses target the same peripheral. *)
-let osh-readback =
-  [W & Device]; (osh-none | osh-ob | osh-bob); [R & Device]
-
-(* Table 2 also applies unchanged to a read followed by a write.  These
- * clauses are stated separately so that the R-to-W case remains explicit as
- * dependency and acquire/release rules are added later. *)
-let osh-rw-none = [R & device-strong]; po; [W & device-strong]
 let osh-rw-ob = [R & device-non-gre]; fencerel(osh-dmb); [W & device-non-gre]
 let osh-rw-bob =
     [R & Normal]; fencerel(osh-dmb); [W & M]
@@ -63,18 +50,45 @@ let osh-rw-bob =
   | [R & Device]; fencerel(osh-dmb); [W & Device-GRE]
   | [R & Device-GRE]; fencerel(osh-dmb); [W & Device]
 
-(* All host orderings visible in the outer-shareable domain. *)
+(* ISH-visible entries have the same access-class restrictions, but an ISH,
+ * OSH, or SY DMB can supply the barrier ordering.  Stronger domains are also
+ * visible to observers in the issuing PE's Inner Shareable domain. *)
+let ish-ob = [M & device-non-gre]; fencerel(ish-dmb); [M & device-non-gre]
+let ish-bob =
+    [M & Normal]; fencerel(ish-dmb); [M]
+  | [R & Device]; fencerel(ish-dmb); [M & Normal]
+  | [M & Device]; fencerel(ish-dmb); [M & Device-GRE]
+  | [M & Device-GRE]; fencerel(ish-dmb); [M & Device]
+let ish-rw-ob = [R & device-non-gre]; fencerel(ish-dmb); [W & device-non-gre]
+let ish-rw-bob =
+    [R & Normal]; fencerel(ish-dmb); [W & M]
+  | [R & Device]; fencerel(ish-dmb); [W & Normal]
+  | [R & Device]; fencerel(ish-dmb); [W & Device-GRE]
+  | [R & Device-GRE]; fencerel(ish-dmb); [W & Device]
+
+(* A PCIe readback requires the Device write to be ordered before the Device
+ * read.  Program order supplies this for non-reordering Device types.  For a
+ * reordering Device type, any DMB orders accesses reaching the same
+ * peripheral, independently of the DMB observer domain.  Peripheral identity
+ * is not represented yet, so the tests use one Device subtype per process and
+ * assume that its readback targets the relevant endpoint. *)
+let device-readback =
+    [W & Device]; device-none; [R & Device]
+  | [W & Device]; fencerel(any-dmb); [R & Device]
+
+(* All preserved program order visible in each shareability domain. *)
+let ish-order =
+  (device-none | ish-ob | ish-bob | device-readback |
+   ish-rw-ob | ish-rw-bob)+
+
 let osh-order =
-  (osh-none | osh-ob | osh-bob | osh-readback |
-   osh-rw-none | osh-rw-ob | osh-rw-bob)+
+  (device-none | osh-ob | osh-bob | device-readback |
+   osh-rw-ob | osh-rw-bob)+
 
-
-(* This is the initial preserved-program-order component.  Rules for Device
- * types, dependencies, and narrower fence scopes can be added independently.
- *)
-let ppo = osh-order
-
-(* Initial communication axiom.  co and fr are supplied by herd's candidate
- * execution; rfe is the external part of reads-from. *)
+(* Communication participates only when both endpoints are in the same
+ * instance of the domain being checked.  Intersecting the complete cycle
+ * relation with tag2scope also prevents ISH ordering from constraining an
+ * observer in a different Inner Shareable domain. *)
 let com = rfe | coe | fre
-acyclic osh-order | com as osh-consistency
+acyclic ((ish-order | com) & tag2scope('inner)) as ish-consistency
+acyclic ((osh-order | com) & tag2scope('outer)) as osh-consistency

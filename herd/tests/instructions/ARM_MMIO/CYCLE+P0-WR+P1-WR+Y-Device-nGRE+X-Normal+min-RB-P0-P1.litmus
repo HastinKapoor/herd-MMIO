@@ -16,9 +16,11 @@ rb1=0;
  P0                          | P1 ;
  MOV W4,#1                   | MOV W4,#2 ;
  STR W4,[X0] [Device-nGRE]   | STR W4,[X0] [Device-GRE] ;
- DMB OSH                     | DMB OSH ;
+ DMB ISH                     | DMB ISH ;
  LDR W9,[X10] [Device-nGRE]  | LDR W9,[X10] [Device-GRE] ;
  DMB OSH                     | DMB OSH ;
  LDR W3,[X1] [Normal]        | LDR W3,[X1] [Normal] ;
+
+scopes: (system (outer (inner (pe P0)) (inner (pe P1))))
 
 exists (0:X3=0 /\ 1:X3=0)

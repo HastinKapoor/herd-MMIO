@@ -15,4 +15,6 @@ x=0; y=0;
  DMB OSH                     | DMB OSH ;
  STR W4,[X1] [Normal]        | STR W4,[X1] [Normal] ;
 
+scopes: (system (outer (inner (pe P0)) (inner (pe P1))))
+
 exists ([x]=2 /\ 0:X2=2)
