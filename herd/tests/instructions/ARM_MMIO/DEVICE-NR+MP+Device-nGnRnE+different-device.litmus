@@ -1,0 +1,20 @@
+AArch64 DEVICE-NR+MP+Device-nGnRnE+different-device
+
+(* Non-Reordering Device accesses without an explicit fence.
+ * Expected observation: Sometimes.
+ *)
+{
+data=0; flag=0;
+0:X0=data; 0:X1=flag;
+1:X0=flag; 1:X1=data;
+}
+
+ P0                           | P1 ;
+ MOV W4,#1                    | LDR W2,[X0] [Device-nGnRnE] ;
+ STR W4,[X0] [Device-nGnRnE]  | LDR W3,[X1] [Device-nGnRnE] ;
+ STR W4,[X1] [Device-nGnRnE]  |  ;
+
+scopes: (system (outer (inner (pe P0) (pe P1))))
+regions: data:device0, flag:device1
+
+exists (1:X2=1 /\ 1:X3=0)

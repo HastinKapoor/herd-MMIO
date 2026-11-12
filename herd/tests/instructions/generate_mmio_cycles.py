@@ -112,6 +112,14 @@ def write_arm(p0pair, p1pair, ytype, xtype, with_rb, weak=False):
         init += ["rb0=0;", "0:X10=rb0;"]
     if with_rb and 1 in rb:
         init += ["rb1=0;", "1:X10=rb1;"]
+    region_locs = ["x", "y"]
+    if with_rb and 0 in rb:
+        region_locs.append("rb0")
+    if with_rb and 1 in rb:
+        region_locs.append("rb1")
+    regions = "regions: " + ", ".join(
+        f"{location}:device0" for location in region_locs
+    )
     expected = "Sometimes" if weak else "Never"
     text = (
         f"AArch64 {name}\n\n"
@@ -120,7 +128,7 @@ def write_arm(p0pair, p1pair, ytype, xtype, with_rb, weak=False):
         "{\n" + "\n".join(init) + "\n}\n\n" +
         columns(arm_seq(0, p0pair, p0types, with_rb),
                 arm_seq(1, p1pair, p1types, with_rb)) +
-        f"\n\n{ARM_CPU_DEVICE_SCOPES}\n\n"
+        f"\n\n{ARM_CPU_DEVICE_SCOPES}\n{regions}\n\n"
         f"exists ({condition('ARM', p0pair, p1pair)})\n"
     )
     (ARM_DIR / f"{name}.litmus").write_text(text)
@@ -150,8 +158,109 @@ def write_arm_scope_mp(same_ish, barrier):
         "0:X0=x; 0:X1=y;\n"
         "1:X0=y; 1:X1=x;\n"
         "}\n\n" + columns(p0, p1) +
-        f"\n\n{scopes}\n\n"
+        f"\n\n{scopes}\nregions: x:device0, y:device0\n\n"
         "exists (1:X2=1 /\\ 1:X3=0)\n"
+    )
+    (ARM_DIR / f"{name}.litmus").write_text(text)
+
+
+def write_arm_device_normal_scope(same_ish, barrier, same_device=True):
+    domain = "same-ISH" if same_ish else "different-ISH"
+    device_group = "same-device" if same_device else "different-device"
+    name = f"SCOPE+MP+Device-GRE-Normal+{domain}+DMB-{barrier}+{device_group}"
+    expected = "Never" if same_ish and same_device else "Sometimes"
+    p0 = [
+        "MOV W4,#1",
+        "STR W4,[X0] [Device-GRE]",
+        f"DMB {barrier}",
+        "STR W4,[X1] [Normal]",
+    ]
+    p1 = [
+        "LDR W2,[X0] [Normal]",
+        f"DMB {barrier}",
+        "LDR W3,[X1] [Device-GRE]",
+    ]
+    scopes = ARM_SAME_ISH_SCOPES if same_ish else ARM_CPU_DEVICE_SCOPES
+    regions = (
+        "regions: data:device0, flag:device0" if same_device
+        else "regions: data:device0, flag:device1"
+    )
+    text = (
+        f"AArch64 {name}\n\n"
+        "(* Device write, full DMB, Normal flag publication.\n"
+        f" * Expected observation: {expected}.\n"
+        " *)\n"
+        "{\n"
+        "data=0; flag=0;\n"
+        "0:X0=data; 0:X1=flag;\n"
+        "1:X0=flag; 1:X1=data;\n"
+        "}\n\n" + columns(p0, p1) +
+        f"\n\n{scopes}\n{regions}\n\n"
+        "exists (1:X2=1 /\\ 1:X3=0)\n"
+    )
+    (ARM_DIR / f"{name}.litmus").write_text(text)
+
+
+def write_arm_nonreordering_device(same_device):
+    device_group = "same-device" if same_device else "different-device"
+    name = f"DEVICE-NR+MP+Device-nGnRnE+{device_group}"
+    expected = "Never" if same_device else "Sometimes"
+    p0 = [
+        "MOV W4,#1",
+        "STR W4,[X0] [Device-nGnRnE]",
+        "STR W4,[X1] [Device-nGnRnE]",
+    ]
+    p1 = [
+        "LDR W2,[X0] [Device-nGnRnE]",
+        "LDR W3,[X1] [Device-nGnRnE]",
+    ]
+    regions = (
+        "regions: data:device0, flag:device0" if same_device
+        else "regions: data:device0, flag:device1"
+    )
+    text = (
+        f"AArch64 {name}\n\n"
+        "(* Non-Reordering Device accesses without an explicit fence.\n"
+        f" * Expected observation: {expected}.\n"
+        " *)\n"
+        "{\n"
+        "data=0; flag=0;\n"
+        "0:X0=data; 0:X1=flag;\n"
+        "1:X0=flag; 1:X1=data;\n"
+        "}\n\n" + columns(p0, p1) +
+        f"\n\n{ARM_SAME_ISH_SCOPES}\n{regions}\n\n"
+        "exists (1:X2=1 /\\ 1:X3=0)\n"
+    )
+    (ARM_DIR / f"{name}.litmus").write_text(text)
+
+
+def write_arm_device_write_normal_read_ish():
+    name = "SCOPE+SB+Device-GRE-W-Normal-R+same-ISH+DMB-ISH+same-device"
+    p0 = [
+        "MOV W4,#1",
+        "STR W4,[X0] [Device-GRE]",
+        "DMB ISH",
+        "LDR W2,[X1] [Normal]",
+    ]
+    p1 = [
+        "MOV W4,#1",
+        "STR W4,[X0] [Normal]",
+        "DMB ISH",
+        "LDR W2,[X1] [Device-GRE]",
+    ]
+    text = (
+        f"AArch64 {name}\n\n"
+        "(* Device write, full DMB, Normal read on both PEs.\n"
+        " * Expected observation: Never.\n"
+        " *)\n"
+        "{\n"
+        "x=0; y=0;\n"
+        "0:X0=x; 0:X1=y;\n"
+        "1:X0=y; 1:X1=x;\n"
+        "}\n\n" + columns(p0, p1) +
+        f"\n\n{ARM_SAME_ISH_SCOPES}\n"
+        "regions: x:device0, y:device0\n\n"
+        "exists (0:X2=0 /\\ 1:X2=0)\n"
     )
     (ARM_DIR / f"{name}.litmus").write_text(text)
 
@@ -235,6 +344,12 @@ def main():
     write_arm_scope_mp(True, "ISH")
     write_arm_scope_mp(False, "ISH")
     write_arm_scope_mp(False, "OSH")
+    write_arm_device_normal_scope(True, "ISH")
+    write_arm_device_normal_scope(False, "OSH")
+    write_arm_device_normal_scope(True, "ISH", False)
+    write_arm_nonreordering_device(True)
+    write_arm_nonreordering_device(False)
+    write_arm_device_write_normal_read_ish()
 
 
 if __name__ == "__main__":

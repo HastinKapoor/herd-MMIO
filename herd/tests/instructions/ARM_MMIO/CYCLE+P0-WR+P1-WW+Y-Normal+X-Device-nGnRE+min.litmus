@@ -16,5 +16,6 @@ x=0; y=0;
  LDR W3,[X1] [Device-nGnRE]  | STR W4,[X1] [Device-GRE] ;
 
 scopes: (system (outer (inner (pe P0)) (inner (pe P1))))
+regions: x:device0, y:device0
 
 exists (0:X3=0 /\ [y]=1)

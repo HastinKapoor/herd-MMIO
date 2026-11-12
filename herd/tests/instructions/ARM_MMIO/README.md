@@ -42,7 +42,18 @@ tests; ordinary AArch64 tests should continue to use the standard
 
 The `-conf` option is required: `mmio.cfg` loads both the CAT model and its
 Bell scope hierarchy.  Running `aarch64mmio.cat` alone does not define the
-`inner` and `outer` scope relations used by the consistency axioms.
+`inner` and `outer` scope relations or the device regions used by the model.
+
+Every location taking part in ordering for one MMIO endpoint is assigned to a
+Bell device region, for example:
+
+    regions: x:device0, y:device0, rb0:device0
+
+Fence-table ordering, non-Reordering Device ordering, and readback ordering
+are intersected with `same-device`.  Consequently, an ordering edge cannot be
+formed between locations assigned to different device regions.  The supplied
+suite uses `device0`; the Bell file provides `device0` through `device7` for
+tests involving more than one endpoint.
 
 The field is parsed into the instruction, propagated to the memory event, and
 exported to CAT as `Normal` or the corresponding `Device-*` set.  This is
@@ -60,15 +71,16 @@ are P0's view, and P1 uses the inverse mapping above.
 
 Each process uses at most one Device subtype.  The suite therefore uses 13
 valid X/Y type pairs per process-shape.  It contains 117 minimally ordered
-tests plus 32 matching `no-RB` variants, for 149 tests total.
+tests plus 32 matching `no-RB` variants, for 149 generated cycle tests.
 
 Every generated CPU/device cycle places P0 and P1 in different Inner
 Shareable domains inside the same Outer Shareable domain:
 
     scopes: (system (outer (inner (pe P0)) (inner (pe P1))))
 
-The generator also emits four `SCOPE+MP` CPU/CPU tests, for 153 ARM tests in
-total.  These use the same memory type for a location on both PEs and show:
+The generator also emits scope and device-region checks.  There are 159 ARM
+tests in total.  These checks use the same memory type for a location on both
+PEs and show:
 
 - `DMB ISH` forbids the MP outcome when both PEs share an Inner Shareable
   domain.
@@ -77,16 +89,22 @@ total.  These use the same memory type for a location on both PEs and show:
 - `DMB OSH` forbids it when those PEs share an Outer Shareable domain.
 - Without fences, the outcome remains permitted even within one Inner
   Shareable domain.
+- Device-write/DMB/Normal-access, for either a read or a write, is ordered for
+  same-ISH PEs but deliberately not by `osh-order` across different Inner
+  Shareable domains.
+- Fence and non-Reordering ordering is present only when both endpoint
+  locations are assigned to the same Bell device region.
 
 Minimal ordering is program order for two non-reordering Device accesses and
-`DMB OSH` for other directly orderable CPU/device pairs.  A Device write followed by a
-Normal access requires a same-subtype Device readback.  The write must itself
-be ordered before that read: program order suffices for `Device-nGnRE` and
-`Device-nGnRnE`, while `Device-GRE` and `Device-nGRE` require a DMB before the
-readback.  Any DMB domain orders accesses reaching the assumed same peripheral;
-the second DMB must cover the observer domain in which the readback-to-Normal
-ordering is used.  The corresponding `no-RB` test omits the readback and
-remains allowed.
+`DMB OSH` for other directly orderable CPU/device pairs.  In the generated
+cross-ISH CPU/device cases, a Device write followed by a Normal access requires
+a same-subtype Device readback.  The write must itself be ordered before that
+read: program order suffices for `Device-nGnRE` and `Device-nGnRnE`, while
+`Device-GRE` and `Device-nGRE` require a DMB before the readback.  Any DMB
+domain orders accesses reaching the assumed same peripheral; the second DMB
+must cover the observer domain in which the readback-to-Normal ordering is
+used.  The corresponding `no-RB` test omits the readback and remains allowed.
+The same-ISH PE-visible exception is described below.
 
 ## Scope topology
 
@@ -101,6 +119,11 @@ a process in a different Inner Shareable domain.
 `DMB ISH`, `DMB OSH`, and `DMB SY` contribute to `ish-order`; only `DMB OSH`
 and `DMB SY` contribute to `osh-order`.  Non-reordering Device order and the
 same-peripheral readback relation can contribute to both.
+
+For PE-visible ordering within one Inner Shareable domain, a Device write
+followed by a full DMB and a Normal read or write contributes to `ish-order`.
+This special edge is deliberately absent from `osh-order`, where the PCIe
+posted-write tests continue to require a completed readback.
 
 ## Pre-ISH backup
 

@@ -31,50 +31,79 @@ let ish-dmb = DMB.ISH | DMB.OSH | DMB.SY
 let osh-dmb = DMB.OSH | DMB.SY
 let any-dmb = DMB.ISH | DMB.OSH | DMB.SY
 
+(* The Arm peripheral-ordering rules apply to a single peripheral.  Tests
+ * assign every location participating in one CPU/device interaction to the
+ * same Bell region.  Keeping the region identity in this relation prevents
+ * an ordering for one device from being composed with an access to another. *)
+let device0 = tag2events('device0)
+let device1 = tag2events('device1)
+let device2 = tag2events('device2)
+let device3 = tag2events('device3)
+let device4 = tag2events('device4)
+let device5 = tag2events('device5)
+let device6 = tag2events('device6)
+let device7 = tag2events('device7)
+let same-device =
+    device0 * device0 | device1 * device1
+  | device2 * device2 | device3 * device3
+  | device4 * device4 | device5 * device5
+  | device6 * device6 | device7 * device7
+
 (* "None" entries: the architecture's peripheral-arrival ordering makes
  * program order visible for pairs of non-reordering Device accesses. *)
-let device-none = [M & device-strong]; po; [M & device-strong]
+let device-none =
+  ([M & device-strong]; po; [M & device-strong]) & same-device
 
 (* OSH-visible entries from the three MMIO ordering tables. *)
-let osh-ob = [M & device-non-gre]; fencerel(osh-dmb); [M & device-non-gre]
+let osh-ob =
+  ([M & device-non-gre]; fencerel(osh-dmb); [M & device-non-gre]) & same-device
 let osh-bob =
-    [M & Normal]; fencerel(osh-dmb); [M]
-  | [R & Device]; fencerel(osh-dmb); [M & Normal]
-  | [M & Device]; fencerel(osh-dmb); [M & Device-GRE]
-  | [M & Device-GRE]; fencerel(osh-dmb); [M & Device]
+  (  [M & Normal]; fencerel(osh-dmb); [M]
+   | [R & Device]; fencerel(osh-dmb); [M & Normal]
+   | [M & Device]; fencerel(osh-dmb); [M & Device-GRE]
+   | [M & Device-GRE]; fencerel(osh-dmb); [M & Device]
+  ) & same-device
 
-let osh-rw-ob = [R & device-non-gre]; fencerel(osh-dmb); [W & device-non-gre]
+let osh-rw-ob =
+  ([R & device-non-gre]; fencerel(osh-dmb); [W & device-non-gre]) & same-device
 let osh-rw-bob =
-    [R & Normal]; fencerel(osh-dmb); [W & M]
-  | [R & Device]; fencerel(osh-dmb); [W & Normal]
-  | [R & Device]; fencerel(osh-dmb); [W & Device-GRE]
-  | [R & Device-GRE]; fencerel(osh-dmb); [W & Device]
+  (  [R & Normal]; fencerel(osh-dmb); [W & M]
+   | [R & Device]; fencerel(osh-dmb); [W & Normal]
+   | [R & Device]; fencerel(osh-dmb); [W & Device-GRE]
+   | [R & Device-GRE]; fencerel(osh-dmb); [W & Device]
+  ) & same-device
 
 (* ISH-visible entries have the same access-class restrictions, but an ISH,
  * OSH, or SY DMB can supply the barrier ordering.  Stronger domains are also
  * visible to observers in the issuing PE's Inner Shareable domain. *)
-let ish-ob = [M & device-non-gre]; fencerel(ish-dmb); [M & device-non-gre]
+let ish-ob =
+  ([M & device-non-gre]; fencerel(ish-dmb); [M & device-non-gre]) & same-device
 let ish-bob =
-    [M & Normal]; fencerel(ish-dmb); [M]
-  | [R & Device]; fencerel(ish-dmb); [M & Normal]
-  | [M & Device]; fencerel(ish-dmb); [M & Device-GRE]
-  | [M & Device-GRE]; fencerel(ish-dmb); [M & Device]
-let ish-rw-ob = [R & device-non-gre]; fencerel(ish-dmb); [W & device-non-gre]
+  (  [M & Normal]; fencerel(ish-dmb); [M]
+   | [R & Device]; fencerel(ish-dmb); [M & Normal]
+   | [W & Device]; fencerel(ish-dmb); [M & Normal]
+   | [M & Device]; fencerel(ish-dmb); [M & Device-GRE]
+   | [M & Device-GRE]; fencerel(ish-dmb); [M & Device]
+  ) & same-device
+let ish-rw-ob =
+  ([R & device-non-gre]; fencerel(ish-dmb); [W & device-non-gre]) & same-device
 let ish-rw-bob =
-    [R & Normal]; fencerel(ish-dmb); [W & M]
-  | [R & Device]; fencerel(ish-dmb); [W & Normal]
-  | [R & Device]; fencerel(ish-dmb); [W & Device-GRE]
-  | [R & Device-GRE]; fencerel(ish-dmb); [W & Device]
+  (  [R & Normal]; fencerel(ish-dmb); [W & M]
+   | [R & Device]; fencerel(ish-dmb); [W & Normal]
+   | [R & Device]; fencerel(ish-dmb); [W & Device-GRE]
+   | [R & Device-GRE]; fencerel(ish-dmb); [W & Device]
+  ) & same-device
 
 (* A PCIe readback requires the Device write to be ordered before the Device
  * read.  Program order supplies this for non-reordering Device types.  For a
  * reordering Device type, any DMB orders accesses reaching the same
- * peripheral, independently of the DMB observer domain.  Peripheral identity
- * is not represented yet, so the tests use one Device subtype per process and
- * assume that its readback targets the relevant endpoint. *)
+ * peripheral, independently of the DMB observer domain.  The same-device
+ * intersection checks the Bell device regions; tests must still choose a
+ * register whose read actually flushes the relevant posted-write path. *)
 let device-readback =
-    [W & Device]; device-none; [R & Device]
-  | [W & Device]; fencerel(any-dmb); [R & Device]
+  (  [W & Device]; device-none; [R & Device]
+   | [W & Device]; fencerel(any-dmb); [R & Device]
+  ) & same-device
 
 (* All preserved program order visible in each shareability domain. *)
 let ish-order =

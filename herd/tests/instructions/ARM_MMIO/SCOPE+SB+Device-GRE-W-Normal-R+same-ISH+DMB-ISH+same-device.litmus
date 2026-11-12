@@ -1,0 +1,21 @@
+AArch64 SCOPE+SB+Device-GRE-W-Normal-R+same-ISH+DMB-ISH+same-device
+
+(* Device write, full DMB, Normal read on both PEs.
+ * Expected observation: Never.
+ *)
+{
+x=0; y=0;
+0:X0=x; 0:X1=y;
+1:X0=y; 1:X1=x;
+}
+
+ P0                        | P1 ;
+ MOV W4,#1                 | MOV W4,#1 ;
+ STR W4,[X0] [Device-GRE]  | STR W4,[X0] [Normal] ;
+ DMB ISH                   | DMB ISH ;
+ LDR W2,[X1] [Normal]      | LDR W2,[X1] [Device-GRE] ;
+
+scopes: (system (outer (inner (pe P0) (pe P1))))
+regions: x:device0, y:device0
+
+exists (0:X2=0 /\ 1:X2=0)

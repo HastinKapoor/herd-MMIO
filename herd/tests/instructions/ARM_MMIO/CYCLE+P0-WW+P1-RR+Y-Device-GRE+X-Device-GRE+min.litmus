@@ -16,5 +16,6 @@ x=0; y=0;
  STR W4,[X1] [Device-GRE]  | LDR W3,[X1] [Normal] ;
 
 scopes: (system (outer (inner (pe P0)) (inner (pe P1))))
+regions: x:device0, y:device0
 
 exists (1:X2=1 /\ 1:X3=0)

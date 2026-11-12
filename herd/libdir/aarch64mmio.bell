@@ -2,6 +2,12 @@
 
 enum scopes = 'pe || 'inner || 'outer || 'system
 
+(* Locations in one region are accesses associated with the same MMIO
+ * device.  The CAT model only derives table, Device-attribute, and readback
+ * ordering between endpoints in the same region. *)
+enum regions = 'device0 || 'device1 || 'device2 || 'device3 ||
+               'device4 || 'device5 || 'device6 || 'device7
+
 let narrower(s) = match s with
   || 'system -> 'outer
   || 'outer -> 'inner
