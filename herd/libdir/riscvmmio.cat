@@ -1,0 +1,77 @@
+RISCV "RISC-V CPU/MMIO ordering model"
+
+(* Access-local memory types.  The same location may be Main for one agent
+ * and Device for another agent. *)
+let Main = try Main with emptyset
+let Device = try Device with emptyset
+
+(* Exact predecessor and successor option membership for RISC-V fences.
+ * These sets do not collapse i/o into r/w. *)
+let FencePred.i = try FencePred.i with emptyset
+let FencePred.o = try FencePred.o with emptyset
+let FencePred.r = try FencePred.r with emptyset
+let FencePred.w = try FencePred.w with emptyset
+let FenceSucc.i = try FenceSucc.i with emptyset
+let FenceSucc.o = try FenceSucc.o with emptyset
+let FenceSucc.r = try FenceSucc.r with emptyset
+let FenceSucc.w = try FenceSucc.w with emptyset
+
+(* Generic coherence construction only. *)
+include "cos.cat"
+
+let MR = R & Main
+let MW = W & Main
+let DR = R & Device
+let DW = W & Device
+
+(* A Main read/write selects r/w; a Device read/write selects i/o. *)
+let fence-order =
+    [MR]; fencerel(FencePred.r & FenceSucc.r); [MR]
+  | [MR]; fencerel(FencePred.r & FenceSucc.w); [MW]
+  | [MR]; fencerel(FencePred.r & FenceSucc.i); [DR]
+  | [MR]; fencerel(FencePred.r & FenceSucc.o); [DW]
+  | [MW]; fencerel(FencePred.w & FenceSucc.r); [MR]
+  | [MW]; fencerel(FencePred.w & FenceSucc.w); [MW]
+  | [MW]; fencerel(FencePred.w & FenceSucc.i); [DR]
+  | [MW]; fencerel(FencePred.w & FenceSucc.o); [DW]
+  | [DR]; fencerel(FencePred.i & FenceSucc.r); [MR]
+  | [DR]; fencerel(FencePred.i & FenceSucc.w); [MW]
+  | [DR]; fencerel(FencePred.i & FenceSucc.i); [DR]
+  | [DR]; fencerel(FencePred.i & FenceSucc.o); [DW]
+  | [DW]; fencerel(FencePred.o & FenceSucc.i); [DR]
+  | [DW]; fencerel(FencePred.o & FenceSucc.o); [DW]
+
+(* PCIe writes are posted.  A subsequent Device read flushes a write only when
+ * fence o,i orders the Device write before that read.  The read's i channel
+ * can then be fenced before a Main-memory r/w access. *)
+let readback =
+  [DW]; fencerel(FencePred.o & FenceSucc.i); [DR]
+
+(* Standard non-fence RISC-V preserved-program-order rules.  They are stated
+ * here rather than importing riscv-defs.cat, whose fence relation deliberately
+ * treats i/o as aliases of r/w. *)
+let po-loc-no-w = po-loc \ (po-loc?; [W]; po-loc)
+let rsw = rf^-1; rf
+let AcqRel = AcqRel | Sc
+let AQ = Acq | AcqRel
+let RL = Rel | AcqRel
+let AMO = try AMO with (R & W)
+let RCsc = (Acq | Rel | AcqRel) & (AMO | X)
+
+let ppo-base =
+    [M]; po-loc; [W]
+  | (([R]; po-loc-no-w; [R]) \ rsw)
+  | [AMO | X]; rfi; [R]
+  | [AQ]; po; [M]
+  | [M]; po; [RL]
+  | [RCsc]; po; [RCsc]
+  | rmw
+  | [M]; addr; [M]
+  | [M]; data; [W]
+  | [M]; ctrl; [W]
+  | [M]; (addr | data); [W]; rfi; [R]
+  | [M]; addr; [M]; po; [W]
+
+let ppo = (ppo-base | fence-order | readback)+
+let com = rfe | co | fr
+acyclic ppo | com as mmio-consistency

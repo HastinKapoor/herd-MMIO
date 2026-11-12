@@ -1,0 +1,10 @@
+Test S08 Required
+States 1
+0:X0=1;
+Ok
+Witnesses
+Positive: 1 Negative: 0
+Condition forall (0:X0=1)
+Observation S08 Always 1 0
+Hash=4d76be266b03d6557fff7cc2d6dc0ff2
+

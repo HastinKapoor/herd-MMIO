@@ -1,0 +1,21 @@
+<gen>: include
+<herd>: include
+<internal>: include
+<internal/lib>: include
+<internal/lib/tests>: include
+<jingle>: include
+<lib>: include
+<lib/tests>: include
+<litmus>: include
+<tools>: include
+
+true: safe_string
+true: dtypes
+true: -traverse
+true: use_menhir
+<*/*.byte>: debug
+<*/*.cmo>: debug
+<*/*.{d.byte,byte,native}>: use_unix,use_str
+<*/*/*/*.{d.byte,byte,native}>: use_unix,use_str
+
+<internal/lib>: use_unix

@@ -1,0 +1,13 @@
+AArch64 A010
+{
+0:X2=0;
+0:X0=NOP;
+}
+      P0       ;
+L1:            ;
+  ADD W2,W2,#1 ;
+  ADD W2,W2,#1 ;
+  ADR X3,L1   ;
+  STR W0,[X3]  ;
+forall (0:X2=2)
+

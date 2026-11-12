@@ -1,0 +1,27 @@
+clean:
+	/bin/rm -f *.o *.s *.t *.elf *.flat *~ $(H)
+
+cleansource:
+	/bin/rm -f *.o *.c *.h *.s *~
+
+%.s: %.c
+	$(CC) $(GCCOPTS) -S $<
+%.o: %.c
+%.o: %.s
+	$(CC) $(GCCOPTS) -c -o $@ $<
+%.t: %.s
+	awk -f show.awk $< > $@
+
+%.elf: LDFLAGS = -nostdlib -pie -n
+%.elf: %.o $(UTILS) $(FLATLIBS) $(SRCDIR)/arm/flat.lds $(cstart.o)
+	$(CC) $(CFLAGS) -c -o $(@:.elf=.aux.o) $(SRCDIR)/lib/auxinfo.c \
+		-DPROGNAME=\"$(@:.elf=.flat)\" -DAUXFLAGS=$(AUXFLAGS)
+	$(LD) $(LDFLAGS) -o $@ -T $(SRCDIR)/arm/flat.lds \
+		$(filter %.o, $^) $(FLATLIBS) $(@:.elf=.aux.o)
+	$(RM) $(@:.elf=.aux.o)
+	@chmod a-x $@
+
+%.flat: %.elf
+	$(call arch_elf_check, $^)
+	$(OBJCOPY) -O binary $^ $@
+	@chmod a-x $@

@@ -1,0 +1,18 @@
+AArch64 CYCLE+P0-WW+P1-WR+Y-Normal+X-Device-nGRE+min
+
+(* Generated two-location cycle. Expected observation: Never.
+ * Y and X types are P0's view; P1 uses the agent-relative inverse mapping.
+ *)
+{
+x=0; y=0;
+0:X0=y; 0:X1=x;
+1:X0=x; 1:X1=y;
+}
+
+ P0                         | P1 ;
+ MOV W4,#1                  | MOV W4,#2 ;
+ STR W4,[X0] [Normal]       | STR W4,[X0] [Normal] ;
+ DMB OSH                    | DMB OSH ;
+ STR W4,[X1] [Device-nGRE]  | LDR W3,[X1] [Device-GRE] ;
+
+exists ([x]=2 /\ 1:X3=0)

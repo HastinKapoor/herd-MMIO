@@ -1,0 +1,22 @@
+(dirs :standard \ catalogue carpenter)
+
+(env
+ (release
+  (flags
+   (:standard -w +a-3-4-9-29-33-41-45-60-67-70)))
+ (dev
+  (flags
+   (:standard -warn-error +A -w +a-3-4-9-29-33-41-45-60-67-70))))
+
+(alias
+ (name default)
+ (deps
+  (alias install)
+  (alias internal/all)))
+
+(alias
+ (name jerd)
+ (deps
+  (alias herd-www/all)))
+
+(documentation)

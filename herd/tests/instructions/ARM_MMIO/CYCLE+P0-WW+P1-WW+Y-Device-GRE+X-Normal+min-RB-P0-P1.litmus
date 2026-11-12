@@ -1,0 +1,24 @@
+AArch64 CYCLE+P0-WW+P1-WW+Y-Device-GRE+X-Normal+min-RB-P0-P1
+
+(* Generated two-location cycle. Expected observation: Never.
+ * Y and X types are P0's view; P1 uses the agent-relative inverse mapping.
+ *)
+{
+x=0; y=0;
+0:X0=y; 0:X1=x;
+1:X0=x; 1:X1=y;
+rb0=0;
+0:X10=rb0;
+rb1=0;
+1:X10=rb1;
+}
+
+ P0                         | P1 ;
+ MOV W4,#1                  | MOV W4,#2 ;
+ STR W4,[X0] [Device-GRE]   | STR W4,[X0] [Device-GRE] ;
+ DMB OSH                    | DMB OSH ;
+ LDR W9,[X10] [Device-GRE]  | LDR W9,[X10] [Device-GRE] ;
+ DMB OSH                    | DMB OSH ;
+ STR W4,[X1] [Normal]       | STR W4,[X1] [Normal] ;
+
+exists ([x]=2 /\ [y]=1)

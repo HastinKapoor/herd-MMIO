@@ -1,0 +1,10 @@
+Test globals Required
+States 1
+
+Ok
+Witnesses
+Positive: 1 Negative: 0
+Condition forall (true)
+Observation globals Always 1 0
+Hash=67542ca438284cccade13b6981c3413b
+

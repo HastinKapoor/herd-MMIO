@@ -1,0 +1,25 @@
+(test
+ (name toposort)
+ (modes native)
+ (enabled_if %{lib-available:qcheck})
+ (libraries asllib qcheck)
+ (modules toposort))
+
+(tests
+ (names static bitvector types)
+ (modes native)
+ (deps
+  (:standard ../libdir/stdlib.asl))
+ (libraries asllib zarith)
+ (modules
+  (:standard \ toposort))
+ (flags
+  (:standard -w -40-42))
+ (action
+  (setenv
+   ASL_LIBDIR
+   %{project_root}/asllib/libdir/
+   (run %{test} -e))))
+
+(cram
+ (deps %{bin:aslref}))

@@ -1,0 +1,72 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+    -   id: check-case-conflict
+    -   id: check-executables-have-shebangs
+    -   id: check-yaml
+    -   id: mixed-line-ending
+
+    -   id: end-of-file-fixer
+        # `(?x)` enables multi-line regexps: https://docs.python.org/3/library/re.html#re.X.
+        exclude: |
+          (?x)(
+            # Vendored files for the Herd web interface.
+            ^herd-www/www/(
+              ace/|
+              BS/|
+              FileSaver.min.js|
+              fonts/|
+              viz.js|
+              whhg-font/
+            )|
+
+            # Expected files should be left verbatim.
+            \.expected(-failure)?$
+          )
+
+    -   id: trailing-whitespace
+        # `(?x)` enables multi-line regexps: https://docs.python.org/3/library/re.html#re.X.
+        exclude: |
+          (?x)(
+            # Vendored files for the Herd web interface.
+            ^herd-www/www/(
+              ace/|
+              BS/|
+              FileSaver.min.js|
+              fonts/|
+              viz.js|
+              whhg-font/
+            )|
+
+            # Expected files should be left verbatim.
+            \.expected(-failure)?$
+          )
+- repo: https://github.com/arenadotio/pre-commit-ocamlformat
+  rev: 0439858f79b3bcb49e757278eb1312e212d7dd4f
+  hooks:
+  -     id: ocamlformat
+        types: [ocaml]
+
+-   repo: local
+    hooks:
+    -   id: make-test
+        name: Run make test
+        language: system
+        entry: make test
+        files: (dune|\.ml.*$|\.litmus.*$)
+        pass_filenames: false
+
+    -   id: opam-lint
+        name: opam lint
+        language: system
+        entry: opam lint
+        files: (\.opam$)
+
+    -   id: lint-shelves
+        name: Lint Catalogue shelves
+        language: system
+        entry: internal/run_built_binary lint_shelves
+        files: shelf.py$

@@ -1,0 +1,13 @@
+%% Should be functional
+\ifempty
+\newcommand{\isempty}[1]{#1}
+\else
+\newcommand{\isempty}[1]{}
+\fi
+
+%%%Safety net
+\iffalse
+\makeatletter
+\newcommand{\isempty}[1]{#1}
+\makeatother
+\fi

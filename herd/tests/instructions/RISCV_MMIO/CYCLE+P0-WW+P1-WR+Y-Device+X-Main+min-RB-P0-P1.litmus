@@ -1,0 +1,24 @@
+RISCV CYCLE+P0-WW+P1-WR+Y-Device+X-Main+min-RB-P0-P1
+
+(* Generated two-location cycle. Expected observation: Never.
+ * Y and X types are P0's view; P1 uses the agent-relative inverse mapping.
+ *)
+{
+x=0; y=0;
+0:x6=y; 0:x8=x;
+1:x6=x; 1:x8=y;
+rb0=0;
+0:x10=rb0;
+rb1=0;
+1:x10=rb1;
+}
+
+ P0                     | P1 ;
+ ori x11,x0,1           | ori x11,x0,2 ;
+ sw x11,0(x6) [Device]  | sw x11,0(x6) [Device] ;
+ fence o,i              | fence o,i ;
+ lw x9,0(x10) [Device]  | lw x9,0(x10) [Device] ;
+ fence i,w              | fence i,r ;
+ sw x11,0(x8) [Main]    | lw x7,0(x8) [Main] ;
+
+exists ([x]=2 /\ 1:x7=0)

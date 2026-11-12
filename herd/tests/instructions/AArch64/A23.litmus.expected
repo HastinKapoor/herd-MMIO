@@ -1,0 +1,10 @@
+Test A23 Allowed
+States 1
+[x]=1;
+Ok
+Witnesses
+Positive: 1 Negative: 0
+Condition exists ([x]=1)
+Observation A23 Always 1 0
+Hash=51ab5c7fd4f8a2403c6a34edd07cf508
+

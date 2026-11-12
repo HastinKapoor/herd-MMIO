@@ -1,0 +1,10 @@
+Test S05 Required
+States 1
+0:X0=0;
+Ok
+Witnesses
+Positive: 1 Negative: 0
+Condition forall (0:X0=0)
+Observation S05 Always 1 0
+Hash=9be4e0f9bac58040fa8221390bb595ed
+

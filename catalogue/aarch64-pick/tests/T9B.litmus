@@ -1,0 +1,15 @@
+AArch64 T9B
+{
+0:X1=x; 0:X2=y;
+1:X1=y; 1:X3=x;
+}
+P0           | P1               ;
+MOV W0,#1    | LDR W0,[X1]      ;
+STR W0,[X1]  | CMP W0,#0        ;
+STLR W0,[X2] | CSEL W2,W4,W5,EQ ;
+             | CBNZ W2,LC00     ; (* Change to X0 and becomes forbidden *)
+	     |LC00:             ;
+	     | ISB              ;
+	     | LDR W6,[X3]      ;
+exists
+(1:X0=1 /\ 1:X6=0)

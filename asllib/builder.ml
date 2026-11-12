@@ -1,0 +1,149 @@
+(******************************************************************************)
+(*                                ASLRef                                      *)
+(******************************************************************************)
+(*
+ * SPDX-FileCopyrightText: Copyright 2022-2023 Arm Limited and/or its affiliates <open-source-office@arm.com>
+ * SPDX-License-Identifier: BSD-3-Clause
+ *)
+(******************************************************************************)
+(* Disclaimer:                                                                *)
+(* This material covers both ASLv0 (viz, the existing ASL pseudocode language *)
+(* which appears in the Arm Architecture Reference Manual) and ASLv1, a new,  *)
+(* experimental, and as yet unreleased version of ASL.                        *)
+(* This material is work in progress, more precisely at pre-Alpha quality as  *)
+(* per Arm’s quality standards.                                               *)
+(* In particular, this means that it would be premature to base any           *)
+(* production tool development on this material.                              *)
+(* However, any feedback, question, query and feature request would be most   *)
+(* welcome; those can be sent to Arm’s Architecture Formal Team Lead          *)
+(* Jade Alglave <jade.alglave@arm.com>, or by raising issues or PRs to the    *)
+(* herdtools7 github repository.                                              *)
+(******************************************************************************)
+
+open Lexing
+
+let _debug = false
+
+type token = Parser.token
+type ast_type = [ `Opn | `Ast ]
+type version = [ `ASLv0 | `ASLv1 ]
+type version_selector = [ `ASLv0 | `ASLv1 | `Any ]
+
+let select_type ~opn ~ast = function
+  | Some `Opn -> opn
+  | Some `Ast -> ast
+  | None -> ast
+
+let _ast_type_to_string = select_type ~opn:"Opn" ~ast:"Ast"
+
+let lexbuf_set_filename lexbuf pos_fname =
+  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname };
+  lexbuf.lex_start_p <- { lexbuf.lex_start_p with pos_fname }
+
+let from_lexbuf ast_type version (lexbuf : lexbuf) =
+  let open Error in
+  let () =
+    if _debug then
+      Format.eprintf "Parsing %s from file %s@."
+        (_ast_type_to_string ast_type)
+        lexbuf.lex_curr_p.pos_fname
+  in
+  let cannot_parse lexbuf =
+    fatal_here lexbuf.lex_start_p lexbuf.lex_curr_p CannotParse
+  in
+  let unknown_symbol lexbuf =
+    fatal_here lexbuf.lex_start_p lexbuf.lex_curr_p UnknownSymbol
+  in
+  match version with
+  | `ASLv1 -> (
+      let parse = select_type ~opn:Parser.opn ~ast:Parser.ast ast_type in
+      try parse Lexer.token lexbuf with
+      | Parser.Error -> cannot_parse lexbuf
+      | Lexer.LexerError -> unknown_symbol lexbuf)
+  | `ASLv0 -> (
+      let parse = select_type ~opn:Gparser0.opn ~ast:Gparser0.ast ast_type
+      and lexer0 = Lexer0.token () in
+      try parse lexer0 lexbuf with Parser0.Error -> cannot_parse lexbuf)
+
+let from_lexbuf' ast_type version lexbuf () =
+  from_lexbuf ast_type version lexbuf
+
+let close_after chan f =
+  try
+    let res = f () in
+    close_in chan;
+    res
+  with e ->
+    close_in_noerr chan;
+    raise e
+
+let open_file filename =
+  let chan = open_in filename in
+  let lexbuf = from_channel chan in
+  lexbuf_set_filename lexbuf filename;
+  (lexbuf, chan)
+
+let from_file ?ast_type version f =
+  let lexbuf, chan = open_file f in
+  close_after chan @@ from_lexbuf' ast_type version lexbuf
+
+let from_file_result ?ast_type version f =
+  let lexbuf, chan = open_file f in
+  close_after chan @@ Error.intercept @@ from_lexbuf' ast_type version lexbuf
+
+let from_lexer_lexbuf ?ast_type version _lexer lexbuf =
+  Error.intercept (from_lexbuf' ast_type version lexbuf) ()
+
+let from_file_multi_version ?ast_type = function
+  | `Any -> (
+      fun fname ->
+        match from_file_result ?ast_type `ASLv0 fname with
+        | Error e ->
+            let () =
+              Format.eprintf
+                "@[Ignoring error on parser v0: %a.@ Trying with parser v1 \
+                 ...@]@."
+                Error.pp_error e
+            in
+            from_file_result ?ast_type `ASLv1 fname
+        | Ok ast -> Ok ast)
+  | (`ASLv0 | `ASLv1) as version -> from_file_result ?ast_type version
+
+let from_string ~filename ~ast_string version ast_type =
+  let lexbuf = Lexing.from_string ~with_positions:true ast_string in
+  lexbuf_set_filename lexbuf filename;
+  from_lexbuf ast_type version lexbuf
+
+let obfuscate = ASTUtils.rename_locals (( ^ ) "__stdlib_local_")
+
+let stdlib =
+  let filename = "ASL Standard Library" and ast_string = Asl_stdlib.stdlib in
+  lazy (from_string ~filename ~ast_string `ASLv1 (Some `Ast) |> obfuscate)
+
+let with_stdlib ast = List.rev_append (Lazy.force stdlib) ast
+
+let extract_name k d =
+  let open AST in
+  match d.desc with
+  | D_Func { name; _ } -> name :: k
+  | D_TypeDecl _ ->
+      prerr_string "Type declaration in stdlib.asl";
+      exit 1
+  | D_GlobalStorage _ ->
+      prerr_string "Storage declaration in stdlib.asl";
+      exit 1
+
+let is_stdlib_name =
+  let open ASTUtils in
+  let set =
+    lazy
+      (let extract_names ds =
+         List.fold_left extract_name [] ds |> ISet.of_list
+       in
+       Lazy.force stdlib |> extract_names)
+  in
+  fun name -> ISet.mem name (Lazy.force set)
+
+let with_primitives ?(loc = ASTUtils.dummy_annotated) primitives =
+  List.map AST.(fun (f, _) -> D_Func f |> ASTUtils.add_pos_from loc) primitives
+  |> List.rev_append
