@@ -78,10 +78,13 @@ let osh-rw-bob =
  * visible to observers in the issuing PE's Inner Shareable domain. *)
 let ish-ob =
   ([M & device-non-gre]; fencerel(ish-dmb); [M & device-non-gre]) & same-device
+(* Toggle this same-ISH extension by swapping the two definitions below. *)
+let ish-device-write-normal = [W & Device]; fencerel(ish-dmb); [M & Normal]
+(* let ish-device-write-normal = 0 *)
 let ish-bob =
   (  [M & Normal]; fencerel(ish-dmb); [M]
    | [R & Device]; fencerel(ish-dmb); [M & Normal]
-   | [W & Device]; fencerel(ish-dmb); [M & Normal]
+   | ish-device-write-normal
    | [M & Device]; fencerel(ish-dmb); [M & Device-GRE]
    | [M & Device-GRE]; fencerel(ish-dmb); [M & Device]
   ) & same-device
