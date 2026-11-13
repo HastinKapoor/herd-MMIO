@@ -1,5 +1,12 @@
 RISCV "RISC-V CPU/MMIO ordering model"
 
+(* PCIe Reads from a second process MAY flush previous writes if they use
+ * the same virtual channel, leading to DW; F; M* being preserved between
+ * CPU processes: a read of the device write by P1 will cause it to be
+ * flushed and thus visible.
+ * This is currently not implemented, since it may not be the case in
+ * general when multiple virtual channels are used *)
+
 (* Access-local memory types.  The same location may be Main for one agent
  * and Device for another agent. *)
 let Main = try Main with emptyset

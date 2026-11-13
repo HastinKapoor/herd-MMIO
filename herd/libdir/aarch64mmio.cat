@@ -8,6 +8,13 @@
  * are independent of the process topology.
  *)
 
+ (* PCIe Reads from a second process MAY flush previous writes if they use
+ * the same virtual channel, leading to DW; F; M* being preserved between
+ * CPU processes: a read of the device write by P1 will cause it to be
+ * flushed and thus visible.
+ * This is currently not implemented, since it may not be the case in
+ * general when multiple virtual channels are used, but it can be toggled *)
+
 (* Optional while the per-access memtype syntax is being wired into events. *)
 let Normal = try Normal with emptyset
 let Device-nGnRnE = try Device-nGnRnE with emptyset
